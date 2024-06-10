@@ -14,7 +14,8 @@ from operator import or_
 import math
 
 from migen import *
-from migen.genlib.misc import WaitTimer
+
+from litex.gen.genlib.misc import WaitTimer
 
 from litex.soc.interconnect.csr import *
 
@@ -32,7 +33,8 @@ class USDDRPHY(Module, AutoCSR):
         cwl              = None,
         cmd_latency      = 0,
         cmd_delay        = None,
-        is_rdimm         = False):
+        is_rdimm         = False,
+        is_clam_shell    = False):
         phytype     = self.__class__.__name__
         device      = {"USDDRPHY": "ULTRASCALE", "USPDDRPHY": "ULTRASCALE_PLUS"}[phytype]
         pads        = PHYPadsCombiner(pads)
@@ -97,7 +99,7 @@ class USDDRPHY(Module, AutoCSR):
             memtype                   = memtype,
             databits                  = databits,
             dfi_databits              = 2*databits,
-            nranks                    = nranks,
+            nranks                    = nranks//2 if is_clam_shell else nranks,
             nphases                   = nphases,
             rdphase                   = self._rdphase.storage,
             wrphase                   = self._wrphase.storage,
@@ -112,6 +114,7 @@ class USDDRPHY(Module, AutoCSR):
             read_leveling             = True,
             delays                    = 512,
             bitslips                  = 8,
+            is_clam_shell             = is_clam_shell,
         )
 
         if is_rdimm:

@@ -15,17 +15,18 @@ from operator import or_
 import math
 
 from migen import *
-from migen.genlib.misc import timeline
+
+from litex.gen import *
+
 from migen.fhdl.specials import Tristate
 from migen.genlib.cdc import MultiReg
-from migen.genlib.misc import WaitTimer
+
+from litex.gen.genlib.misc import timeline
 
 from litex.soc.interconnect.csr import *
 
 from litedram.common import *
 from litedram.phy.dfi import *
-
-class Open(Signal): pass
 
 # BitSlip ------------------------------------------------------------------------------------------
 
@@ -173,8 +174,8 @@ class GW2DDRPHY(Module, AutoCSR):
             wrphase       = wrphase,
             cl            = cl,
             cwl           = cwl,
-            read_latency  = cl_sys_latency + 10,
-            write_latency = cwl_sys_latency,
+            read_latency  = cl_sys_latency + 9,
+            write_latency = cwl_sys_latency - 1,
             read_leveling = True,
             bitslips      = 4,
             delays        = 8,
@@ -201,7 +202,7 @@ class GW2DDRPHY(Module, AutoCSR):
                     i_RESET = ResetSignal("sys"),
                     i_PCLK  = ClockSignal("sys"),
                     i_FCLK  = ClockSignal("sys2x"),
-                    **{f"i_TX{n}": 0b0 for n in range(2)}, # CHECKME: Polarity
+                    **{f"i_TX{n}": 0b0 for n in range(2)},
                     **{f"i_D{n}": (clk_pattern >> n) & 0b1 for n in range(4)},
                     o_Q0    = pad_oddrx2f,
                     o_Q1    = Open()
@@ -247,7 +248,7 @@ class GW2DDRPHY(Module, AutoCSR):
                         i_RESET = ResetSignal("sys"),
                         i_PCLK = ClockSignal("sys"),
                         i_FCLK = ClockSignal("sys2x"),
-                        **{f"i_TX{n}": 0b0 for n in range(2)}, # CHECKME: Polarity
+                        **{f"i_TX{n}": 0b0 for n in range(2)},
                         **{f"i_D{n}": getattr(dfi.phases[n//2], dfi_name)[i] for n in range(4)},
                         o_Q0   = pad_oddrx2f,
                         o_Q1   = Open()
@@ -313,7 +314,7 @@ class GW2DDRPHY(Module, AutoCSR):
                 o_RBURST   = burstdet,
 
                 # Writes (generate shifted ECLK clock for writes)
-                i_WSTEP    = Constant(0, 8), # CHECKME: Useful?
+                i_WSTEP    = Constant(0, 8),
                 o_DQSW270  = dqsw270,
                 o_DQSW0    = dqsw
             )
@@ -335,8 +336,8 @@ class GW2DDRPHY(Module, AutoCSR):
                     i_PCLK  = ClockSignal("sys"),
                     i_FCLK  = ClockSignal("sys2x"),
                     i_TCLK  = dqsw,
-                    i_TX0   = ~(dqs_oe | dqs_postamble), # CHECKME: Polarity + Latency.
-                    i_TX1   = ~(dqs_oe | dqs_preamble),  # CHECKME: Polatiry + Latency.
+                    i_TX0   = ~(dqs_oe | dqs_postamble),
+                    i_TX1   = ~(dqs_oe | dqs_preamble),
                     **{f"i_D{n}": (0b1010 >> n) & 0b1 for n in range(4)},
                     o_Q0    = dqs_o,
                     o_Q1    = dqs_o_oen
@@ -368,7 +369,7 @@ class GW2DDRPHY(Module, AutoCSR):
                 i_PCLK  = ClockSignal("sys"),
                 i_FCLK  = ClockSignal("sys2x"),
                 i_TCLK  = dqsw270,
-                **{f"i_TX{n}": 0b0 for n in range(2)}, # CHECKME: Polarity
+                **{f"i_TX{n}": 0b0 for n in range(2)},
                 **{f"i_D{n}": dm_o_data_muxed[n] for n in range(4)},
                 o_Q0    = pads.dm[i],
                 o_Q1    = Open()
@@ -397,8 +398,8 @@ class GW2DDRPHY(Module, AutoCSR):
                     i_PCLK  = ClockSignal("sys"),
                     i_FCLK  = ClockSignal("sys2x"),
                     i_TCLK  = dqsw270,
-                    i_TX0   = ~dq_oe, # CHECKME: Polarity + Latency.
-                    i_TX1   = ~dq_oe, # CHECKME: Polarity + Latency.
+                    i_TX0   = ~dq_oe,
+                    i_TX1   = ~dq_oe,
                     **{f"i_D{n}": dq_o_data_muxed[n] for n in range(4)},
                     o_Q0    = dq_o,
                     o_Q1    = dq_o_oen,
@@ -432,7 +433,7 @@ class GW2DDRPHY(Module, AutoCSR):
                 )
 
         # Read Control Path ------------------------------------------------------------------------
-        rdtap = cl_sys_latency # CHECKME: Latency.
+        rdtap = cl_sys_latency - 1
 
         # Creates a delay line of read commands coming from the DFI interface. The taps are used to
         # control DQS read (internal read pulse of the DQSBUF) and the output of the delay is used
@@ -453,7 +454,7 @@ class GW2DDRPHY(Module, AutoCSR):
         self.comb += dqs_re.eq(rddata_en.taps[rdtap] | rddata_en.taps[rdtap + 1])
 
         # Write Control Path -----------------------------------------------------------------------
-        wrtap = cwl_sys_latency  # CHECKME: Latency.
+        wrtap = cwl_sys_latency - 1
 
         # Create a delay line of write commands coming from the DFI interface. This taps are used to
         # control DQ/DQS tristates and to select write data of the DRAM burst from the DFI interface.
@@ -462,7 +463,7 @@ class GW2DDRPHY(Module, AutoCSR):
         # then performed in 2 sys_clk cycles and data needs to be selected for each cycle.
         wrdata_en = TappedDelayLine(
             signal = reduce(or_, [dfi.phases[i].wrdata_en for i in range(nphases)]),
-            ntaps  = wrtap + 4  # CHECKME: Latency.
+            ntaps  = wrtap + 4
         )
         self.submodules += wrdata_en
 
