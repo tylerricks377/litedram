@@ -98,7 +98,7 @@ class BankMachine(Module):
     cmd : Endpoint(cmd_request_rw_layout)
         Stream of commands to the Multiplexer
     """
-    def __init__(self, n, address_width, address_align, nranks, settings):
+    def __init__(self, n, address_width, address_align, nranks, settings, auto_precharge_csr):
         self.req = req = Record(cmd_layout(address_width))
         self.refresh_req = refresh_req = Signal()
         self.refresh_gnt = refresh_gnt = Signal()
@@ -172,8 +172,8 @@ class BankMachine(Module):
         if settings.with_auto_precharge:
             self.comb += \
                 If(cmd_buffer_lookahead.source.valid & cmd_buffer.source.valid,
-                    If(slicer.row(cmd_buffer_lookahead.source.addr) !=
-                       slicer.row(cmd_buffer.source.addr),
+                    If((slicer.row(cmd_buffer_lookahead.source.addr) !=
+                       slicer.row(cmd_buffer.source.addr)) | auto_precharge_csr,
                         auto_precharge.eq(row_close == 0)
                     )
                 )

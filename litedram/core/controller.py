@@ -46,7 +46,7 @@ class ControllerSettings(Settings):
 # Controller ---------------------------------------------------------------------------------------
 
 class LiteDRAMController(Module):
-    def __init__(self, phy_settings, geom_settings, timing_settings, clk_freq,
+    def __init__(self, phy_settings, geom_settings, timing_settings, clk_freq, trefi, refresh_csr, refresh_enable, auto_precharge_csr,
         controller_settings=ControllerSettings()):
         if phy_settings.memtype == "SDR":
             burst_length = phy_settings.nphases
@@ -78,7 +78,10 @@ class LiteDRAMController(Module):
 
         # Refresher --------------------------------------------------------------------------------
         self.submodules.refresher = self.settings.refresh_cls(self.settings,
-            clk_freq   = clk_freq,
+            clk_freq       = clk_freq,
+            trefi          = trefi,
+            refresh_csr    = refresh_csr,
+            refresh_enable = refresh_enable,
             zqcs_freq  = self.settings.refresh_zqcs_freq,
             postponing = self.settings.refresh_postponing)
 
@@ -86,10 +89,11 @@ class LiteDRAMController(Module):
         bank_machines = []
         for n in range(nranks*nbanks):
             bank_machine = BankMachine(n,
-                address_width = interface.address_width,
-                address_align = address_align,
-                nranks        = nranks,
-                settings      = self.settings)
+                address_width      = interface.address_width,
+                address_align      = address_align,
+                nranks             = nranks,
+                settings           = self.settings,
+                auto_precharge_csr = auto_precharge_csr)
             bank_machines.append(bank_machine)
             self.submodules += bank_machine
             self.comb += getattr(interface, "bank"+str(n)).connect(bank_machine.req)
